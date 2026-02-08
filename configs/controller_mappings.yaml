@@ -1,0 +1,50 @@
+# Default controller button mappings for Playnite Python
+# This file defines how physical controller buttons map to navigation actions
+
+default_mapping: xbox
+
+mappings:
+  xbox:
+    # Physical button ID to standard button mapping
+    buttons:
+      '0': a           # A button
+      '1': b           # B button
+      '2': x           # X button
+      '3': y           # Y button
+      '4': lb          # Left bumper
+      '5': rb          # Right bumper
+      '6': select      # Back/Select
+      '7': start       # Start
+      '8': ls_press    # Left stick press
+      '9': rs_press    # Right stick press
+
+    # Standard button to navigation action mapping
+    actions:
+      a: select        # A = Select/Confirm
+      b: back          # B = Back/Cancel
+      x: favorite      # X = Toggle favorite
+      y: search        # Y = Open search
+      lb: filter       # LB = Open filters
+      start: menu      # Start = Open menu
+
+  playstation:
+    # PlayStation controller mapping
+    buttons:
+      '0': x           # Cross (X)
+      '1': a           # Circle (O)
+      '2': b           # Square
+      '3': y           # Triangle
+      '4': lb          # L1
+      '5': rb          # R1
+      '8': select      # Share
+      '9': start       # Options
+      '10': ls_press   # L3
+      '11': rs_press   # R3
+
+    actions:
+      x: select        # Cross = Select
+      a: back          # Circle = Back
+      b: favorite      # Square = Favorite
+      y: search        # Triangle = Search
+      lb: filter       # L1 = Filter
+      start: menu      # Options = Menu
