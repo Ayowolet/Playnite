@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "playnite"
+version = "0.1.0"
+description = "Python game library manager - Playnite replacement"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "sqlalchemy>=2.0,<3",
+    "rapidfuzz>=3.0,<4",
+    "click>=8.0,<10",
+    "pyyaml>=6.0,<7",
+    "pygame>=2.0,<3",
+]
+
+[project.optional-dependencies]
+controller = [
+    "inputs>=0.5",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+]
+
+[project.scripts]
+playnite = "playnite.cli.main:cli"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
