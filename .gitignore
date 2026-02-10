@@ -280,3 +280,9 @@ source/PlayniteServices/twitchTokens.json
 XBOXONE.ttf
 PlayStation4.ttf
 source/Playnite.FullscreenApp/Themes/Fullscreen/Default/audio/*
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.claude/
