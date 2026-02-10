@@ -1,0 +1,12 @@
+Id: PythonBridge
+Name: Python Features
+Author: Playnite Python Team
+Version: 1.0.0
+Module: Playnite.PythonBridge.dll
+Type: GenericPlugin
+Icon: icon.png
+Links:
+  - Name: GitHub
+    Url: https://github.com/yourusername/playnite-python
+  - Name: Documentation
+    Url: https://github.com/yourusername/playnite-python/wiki

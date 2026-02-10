@@ -1,0 +1,44 @@
+# Web Framework
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.5.0
+python-multipart>=0.0.6
+
+# ML & Data Science
+scikit-learn>=1.4.0
+pandas>=2.2.0
+numpy>=1.26.0
+scipy>=1.12.0
+
+# Media Processing
+opencv-python>=4.9.0
+Pillow>=10.2.0
+ffmpeg-python>=0.2.0
+mss>=9.0.0              # Fast screenshot
+pynput>=1.7.6           # Hotkey listener
+
+# Database
+sqlalchemy>=2.0.25
+alembic>=1.13.0         # Migrations
+
+# Utilities
+python-dotenv>=1.0.0
+loguru>=0.7.2
+httpx>=0.26.0           # HTTP client
+typer>=0.9.0            # CLI framework
+rich>=13.7.0            # Beautiful CLI output
+
+# Security
+python-jose[cryptography]>=3.3.0  # JWT tokens
+passlib[bcrypt]>=1.7.4            # Password hashing
+python-multipart>=0.0.6           # Form data
+
+# Monitoring
+prometheus-client>=0.19.0         # Prometheus metrics
+psutil>=5.9.0                     # System metrics
+
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.23.0
+pytest-cov>=4.1.0
+httpx>=0.26.0           # For async test client

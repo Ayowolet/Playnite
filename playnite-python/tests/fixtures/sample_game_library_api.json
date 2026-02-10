@@ -1,0 +1,24 @@
+{
+  "user_id": "test-user",
+  "library": [
+    {
+      "game_id": "1",
+      "name": "Dark Souls",
+      "genres": ["RPG", "Action"],
+      "developers": ["FromSoftware"],
+      "playtime_seconds": 72000,
+      "user_score": 90,
+      "favorite": true,
+      "hidden": false
+    },
+    {
+      "game_id": "2",
+      "name": "Elden Ring",
+      "genres": ["RPG", "Action"],
+      "developers": ["FromSoftware"],
+      "playtime_seconds": 0,
+      "hidden": false
+    }
+  ],
+  "limit": 5
+}

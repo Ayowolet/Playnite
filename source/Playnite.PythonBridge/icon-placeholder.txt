@@ -1,0 +1,16 @@
+ICON PLACEHOLDER
+
+The extension.yaml references icon.png which should be a PNG image file.
+
+For a real implementation, create a 64x64 or 128x128 PNG icon with:
+- A Python logo or snake icon
+- Combined with a game controller or Playnite logo
+- Use transparent background
+
+You can generate icons using:
+- Online icon generators
+- Photoshop/GIMP
+- AI image generators
+- Free icon libraries (e.g., icons8.com, flaticon.com)
+
+Place the icon.png file in this directory before building the plugin.

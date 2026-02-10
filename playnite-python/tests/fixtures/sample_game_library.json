@@ -1,0 +1,374 @@
+[
+  {
+    "game_id": "1",
+    "name": "Dark Souls",
+    "genres": [
+      "RPG",
+      "Action"
+    ],
+    "developers": [
+      "FromSoftware"
+    ],
+    "publishers": [
+      "Bandai Namco"
+    ],
+    "platforms": [
+      "PC"
+    ],
+    "tags": [
+      "Souls-like",
+      "Difficult",
+      "Third Person"
+    ],
+    "features": [
+      "Single Player"
+    ],
+    "playtime_seconds": 72000,
+    "play_count": 15,
+    "user_score": 90,
+    "community_score": 89,
+    "completion_status": "Completed",
+    "is_installed": true,
+    "favorite": true,
+    "hidden": false,
+    "time_to_complete": 60,
+    "time_to_complete_100": 90,
+    "difficulty": "extreme",
+    "vr_compatible": false,
+    "vr_required": false
+  },
+  {
+    "game_id": "2",
+    "name": "Elden Ring",
+    "genres": [
+      "RPG",
+      "Action"
+    ],
+    "developers": [
+      "FromSoftware"
+    ],
+    "publishers": [
+      "Bandai Namco"
+    ],
+    "platforms": [
+      "PC"
+    ],
+    "tags": [
+      "Souls-like",
+      "Open World"
+    ],
+    "features": [
+      "Single Player",
+      "Multiplayer"
+    ],
+    "playtime_seconds": 0,
+    "play_count": 0,
+    "community_score": 95,
+    "critic_score": 96,
+    "is_installed": false,
+    "favorite": false,
+    "hidden": false,
+    "time_to_complete": 80,
+    "time_to_complete_100": 120,
+    "difficulty": "hard",
+    "vr_compatible": false,
+    "vr_required": false
+  },
+  {
+    "game_id": "3",
+    "name": "Stardew Valley",
+    "genres": [
+      "Simulation",
+      "Indie"
+    ],
+    "developers": [
+      "ConcernedApe"
+    ],
+    "publishers": [
+      "ConcernedApe"
+    ],
+    "platforms": [
+      "PC"
+    ],
+    "tags": [
+      "Farming",
+      "Relaxing",
+      "Pixel Graphics"
+    ],
+    "features": [
+      "Single Player",
+      "Multiplayer"
+    ],
+    "playtime_seconds": 0,
+    "play_count": 0,
+    "community_score": 92,
+    "is_installed": true,
+    "favorite": false,
+    "hidden": false,
+    "time_to_complete": 45,
+    "time_to_complete_100": 70,
+    "difficulty": "easy",
+    "vr_compatible": false,
+    "vr_required": false
+  },
+  {
+    "game_id": "4",
+    "name": "The Witcher 3",
+    "genres": [
+      "RPG",
+      "Action"
+    ],
+    "developers": [
+      "CD Projekt Red"
+    ],
+    "publishers": [
+      "CD Projekt"
+    ],
+    "platforms": [
+      "PC"
+    ],
+    "tags": [
+      "Open World",
+      "Story Rich"
+    ],
+    "features": [
+      "Single Player"
+    ],
+    "playtime_seconds": 0,
+    "play_count": 0,
+    "community_score": 94,
+    "critic_score": 93,
+    "is_installed": false,
+    "favorite": false,
+    "hidden": false,
+    "time_to_complete": 50,
+    "time_to_complete_100": 80,
+    "difficulty": "medium",
+    "vr_compatible": false,
+    "vr_required": false
+  },
+  {
+    "game_id": "5",
+    "name": "Bloodborne",
+    "genres": [
+      "RPG",
+      "Action"
+    ],
+    "developers": [
+      "FromSoftware"
+    ],
+    "publishers": [
+      "Sony"
+    ],
+    "platforms": [
+      "PlayStation"
+    ],
+    "tags": [
+      "Souls-like",
+      "Gothic",
+      "Difficult"
+    ],
+    "features": [
+      "Single Player"
+    ],
+    "playtime_seconds": 0,
+    "play_count": 0,
+    "community_score": 92,
+    "is_installed": false,
+    "favorite": false,
+    "hidden": false,
+    "time_to_complete": 35,
+    "time_to_complete_100": 55,
+    "difficulty": "extreme",
+    "vr_compatible": false,
+    "vr_required": false
+  },
+  {
+    "game_id": "6",
+    "name": "Hades",
+    "genres": [
+      "Action",
+      "Roguelike"
+    ],
+    "developers": [
+      "Supergiant Games"
+    ],
+    "publishers": [
+      "Supergiant Games"
+    ],
+    "platforms": [
+      "PC"
+    ],
+    "tags": [
+      "Roguelite",
+      "Indie",
+      "Fast-Paced"
+    ],
+    "features": [
+      "Single Player"
+    ],
+    "playtime_seconds": 0,
+    "play_count": 0,
+    "community_score": 93,
+    "critic_score": 93,
+    "is_installed": true,
+    "favorite": false,
+    "hidden": false,
+    "time_to_complete": 20,
+    "time_to_complete_100": 40,
+    "difficulty": "medium",
+    "vr_compatible": false,
+    "vr_required": false
+  },
+  {
+    "game_id": "7",
+    "name": "Celeste",
+    "genres": [
+      "Platformer",
+      "Indie"
+    ],
+    "developers": [
+      "Maddy Makes Games"
+    ],
+    "publishers": [
+      "Maddy Makes Games"
+    ],
+    "platforms": [
+      "PC"
+    ],
+    "tags": [
+      "Difficult",
+      "Pixel Graphics",
+      "Story Rich"
+    ],
+    "features": [
+      "Single Player"
+    ],
+    "playtime_seconds": 25200,
+    "play_count": 8,
+    "user_score": 85,
+    "community_score": 90,
+    "completion_status": "Beaten",
+    "is_installed": true,
+    "favorite": false,
+    "hidden": false,
+    "time_to_complete": 9,
+    "difficulty": "hard",
+    "vr_compatible": false,
+    "vr_required": false,
+    "time_to_complete_100": 29
+  },
+  {
+    "game_id": "8",
+    "name": "Portal 2",
+    "genres": [
+      "Puzzle",
+      "Platformer"
+    ],
+    "developers": [
+      "Valve"
+    ],
+    "publishers": [
+      "Valve"
+    ],
+    "platforms": [
+      "PC"
+    ],
+    "tags": [
+      "Puzzle",
+      "Sci-fi",
+      "Comedy"
+    ],
+    "features": [
+      "Single Player",
+      "Co-op"
+    ],
+    "playtime_seconds": 18000,
+    "play_count": 3,
+    "user_score": 95,
+    "community_score": 95,
+    "completion_status": "Completed",
+    "is_installed": false,
+    "favorite": true,
+    "hidden": false,
+    "time_to_complete": 8,
+    "difficulty": "easy",
+    "vr_compatible": false,
+    "vr_required": false,
+    "time_to_complete_100": 28
+  },
+  {
+    "game_id": "9",
+    "name": "Cyberpunk 2077",
+    "genres": [
+      "RPG",
+      "Action"
+    ],
+    "developers": [
+      "CD Projekt Red"
+    ],
+    "publishers": [
+      "CD Projekt"
+    ],
+    "platforms": [
+      "PC"
+    ],
+    "tags": [
+      "Open World",
+      "Cyberpunk",
+      "Story Rich"
+    ],
+    "features": [
+      "Single Player"
+    ],
+    "playtime_seconds": 0,
+    "play_count": 0,
+    "community_score": 75,
+    "critic_score": 86,
+    "is_installed": false,
+    "favorite": false,
+    "hidden": false,
+    "time_to_complete": 55,
+    "difficulty": "medium",
+    "vr_compatible": false,
+    "vr_required": false,
+    "time_to_complete_100": 75
+  },
+  {
+    "game_id": "10",
+    "name": "Hollow Knight",
+    "genres": [
+      "Platformer",
+      "Metroidvania",
+      "Indie"
+    ],
+    "developers": [
+      "Team Cherry"
+    ],
+    "publishers": [
+      "Team Cherry"
+    ],
+    "platforms": [
+      "PC"
+    ],
+    "tags": [
+      "Difficult",
+      "Atmospheric",
+      "2D"
+    ],
+    "features": [
+      "Single Player"
+    ],
+    "playtime_seconds": 0,
+    "play_count": 0,
+    "community_score": 94,
+    "is_installed": false,
+    "favorite": false,
+    "hidden": false,
+    "time_to_complete": 30,
+    "difficulty": "hard",
+    "vr_compatible": false,
+    "vr_required": false,
+    "time_to_complete_100": 50
+  }
+]

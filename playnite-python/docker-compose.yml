@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  # PostgreSQL database
+  postgres:
+    image: postgres:15-alpine
+    container_name: playnite-postgres
+    environment:
+      POSTGRES_USER: playnite
+      POSTGRES_PASSWORD: playnite_password
+      POSTGRES_DB: playnite_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U playnite"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - playnite-network
+
+  # Python service
+  playnite-python:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: playnite-python
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://playnite:playnite_password@postgres:5432/playnite_db
+      - HOST=0.0.0.0
+      - PORT=5555
+      - ENABLE_METRICS=true
+      - RATE_LIMIT_ENABLED=true
+      - ENABLE_API_KEY_AUTH=false
+      - LOG_LEVEL=INFO
+    ports:
+      - "5555:5555"
+      - "9090:9090"  # Metrics port
+    volumes:
+      - ./data:/data
+      - ./captures:/captures
+      - ./src:/app/src  # Mount source for development
+    networks:
+      - playnite-network
+    restart: unless-stopped
+
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: playnite-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - playnite-network
+    restart: unless-stopped
+
+  # Grafana for metrics visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: playnite-grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    networks:
+      - playnite-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  playnite-network:
+    driver: bridge
