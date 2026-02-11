@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "game-library-manager"
+version = "0.1.0"
+description = "Python game library manager with intelligent duplicate detection and smart library merging"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "GPL-3.0-only" }
+keywords = ["games", "library", "duplicates", "playnite"]
+dependencies = [
+    "click>=8.1",
+    "rapidfuzz>=3.0",
+    "rich>=13.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.0",
+]
+
+[project.scripts]
+gamelibrary = "game_library.cli.main:cli"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+
+[tool.coverage.run]
+source = ["game_library"]

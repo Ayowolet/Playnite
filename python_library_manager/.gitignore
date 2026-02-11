@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Build / packaging
+*.egg-info/
+dist/
+build/
+*.egg
+MANIFEST
+
+# Test / coverage artifacts
+.coverage
+coverage.json
+.pytest_cache/
+.benchmarks/
+htmlcov/
+
+# Runtime data
+backups/
+
+# Editors / OS
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
