@@ -29,7 +29,6 @@ from uuid import UUID
 from playnite_py.core.models.game import Game, GameAction, GameActionType
 from playnite_py.core.models.configuration import (
     PlatformConfiguration,
-    EnvironmentConfig,
     CompatibilityConfig,
 )
 from playnite_py.configurations.compatibility import CompatibilityManager
@@ -85,7 +84,6 @@ class GameLauncher:
     def __init__(self) -> None:
         """Initialize the game launcher."""
         self.compatibility_manager = CompatibilityManager()
-        self._original_env: dict[str, str] = {}
         self._temp_files: list[Path] = []
 
     def launch_game(
@@ -129,15 +127,14 @@ class GameLauncher:
             if config and config.pre_launch_script:
                 self._run_script(config.pre_launch_script, "pre-launch")
 
-            # Set up environment
-            if config:
-                self._setup_environment(config.environment)
-
-            # Build the launch command
+            # Build the launch command (this also prepares compatibility env)
             command = self._build_launch_command(game, action, config)
             if not command:
                 result.error_message = "Failed to build launch command"
                 return result
+
+            # Build the environment dict (without modifying os.environ)
+            launch_env = self._build_launch_environment(config)
 
             # Launch the game
             result.start_time = datetime.now()
@@ -151,7 +148,7 @@ class GameLauncher:
                 process = subprocess.Popen(
                     command,
                     cwd=working_dir,
-                    env=os.environ.copy(),
+                    env=launch_env,  # Pass explicit env dict, never modify os.environ
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                 )
@@ -184,9 +181,6 @@ class GameLauncher:
             # Run post-launch script
             if config and config.post_launch_script:
                 self._run_script(config.post_launch_script, "post-launch")
-
-            # Restore environment
-            self._restore_environment()
 
             # Clean up temp files
             self._cleanup_temp_files()
@@ -314,24 +308,51 @@ class GameLauncher:
 
         return None
 
-    def _setup_environment(self, env_config: EnvironmentConfig) -> None:
-        """Set up the environment for game launch."""
-        # Save original environment
-        self._original_env = dict(os.environ)
+    def _build_launch_environment(
+        self,
+        config: Optional[PlatformConfiguration],
+    ) -> dict[str, str]:
+        """
+        Build the environment dict for launching a game.
 
-        # Apply environment configuration
-        env = env_config.get_environment()
-        os.environ.update(env)
+        Creates an isolated environment dict without modifying os.environ.
+        This ensures thread-safety and prevents pollution of the parent process.
 
-        logger.debug(f"Environment updated with {len(env_config.set_variables)} variables")
+        Args:
+            config: Platform configuration (may be None)
 
-    def _restore_environment(self) -> None:
-        """Restore the original environment."""
-        if self._original_env:
-            os.environ.clear()
-            os.environ.update(self._original_env)
-            self._original_env = {}
-            logger.debug("Environment restored")
+        Returns:
+            Complete environment dict to pass to subprocess
+        """
+        # Start with a copy of the current environment
+        env = os.environ.copy()
+
+        # Apply user environment config if provided
+        if config and config.environment:
+            # Unset specified variables
+            for var in config.environment.unset_variables:
+                env.pop(var, None)
+
+            # Set specified variables (with expansion if enabled)
+            for name, value in config.environment.set_variables.items():
+                if config.environment.expand_variables:
+                    # Expand references to other variables
+                    for existing_name, existing_value in env.items():
+                        value = value.replace(f"${existing_name}", existing_value)
+                        value = value.replace(f"${{{existing_name}}}", existing_value)
+                env[name] = value
+
+        # Add compatibility layer environment variables
+        compat_env = self.compatibility_manager.get_launch_environment()
+        env.update(compat_env)
+
+        logger.debug(
+            f"Built launch environment with "
+            f"{len(config.environment.set_variables) if config and config.environment else 0} "
+            f"user vars and {len(compat_env)} compatibility vars"
+        )
+
+        return env
 
     def _run_script(self, script_content: str, script_type: str) -> bool:
         """

@@ -31,11 +31,15 @@ class CompatibilityManager:
     Handles Wine, Proton, CrossOver, and other compatibility
     layers on Linux, as well as Windows compatibility settings.
 
+    Environment variables are returned as dicts, never modifying os.environ
+    directly, to prevent pollution of the parent process and ensure
+    thread-safe concurrent game launches.
+
     Example:
         >>> manager = CompatibilityManager()
         >>> cmd = manager.get_launch_command("/game.exe", config)
-        >>> print(cmd)
-        ['wine', '/game.exe']
+        >>> env = manager.get_launch_environment(config)
+        >>> subprocess.Popen(cmd, env={**os.environ, **env})
     """
 
     # Well-known Proton paths in Steam
@@ -51,6 +55,7 @@ class CompatibilityManager:
         """Initialize the compatibility manager."""
         self._wine_path: Optional[Path] = None
         self._proton_path: Optional[Path] = None
+        self._last_env: dict[str, str] = {}  # Store env from last get_launch_command
 
     def get_launch_command(
         self,
@@ -59,6 +64,9 @@ class CompatibilityManager:
     ) -> Optional[list[str]]:
         """
         Get the launch command for a Windows executable.
+
+        Also builds the environment variables needed (retrievable via
+        get_launch_environment()). Does NOT modify os.environ.
 
         Args:
             executable_path: Path to the Windows executable
@@ -69,7 +77,12 @@ class CompatibilityManager:
 
         Example:
             >>> cmd = manager.get_launch_command("/path/game.exe", config)
+            >>> env = manager.get_launch_environment()
+            >>> subprocess.Popen(cmd, env={**os.environ, **env})
         """
+        # Reset last environment
+        self._last_env = {}
+
         # No compatibility layer needed on Windows
         if platform.system() == "Windows":
             return None
@@ -93,6 +106,24 @@ class CompatibilityManager:
             logger.warning(f"Unknown compatibility layer type: {layer_type}")
             return None
 
+    def get_launch_environment(self) -> dict[str, str]:
+        """
+        Get the environment variables from the last get_launch_command() call.
+
+        Returns a dict that should be merged with os.environ and passed to
+        subprocess. Does NOT modify os.environ.
+
+        Returns:
+            Dictionary of environment variables for the compatibility layer
+
+        Example:
+            >>> cmd = manager.get_launch_command("/game.exe", config)
+            >>> env = manager.get_launch_environment()
+            >>> full_env = {**os.environ, **env}
+            >>> subprocess.Popen(cmd, env=full_env)
+        """
+        return self._last_env.copy()
+
     def _get_wine_command(
         self,
         executable_path: str,
@@ -107,8 +138,8 @@ class CompatibilityManager:
             logger.warning("Wine not found, using 'wine' from PATH")
             wine_path = "wine"
 
-        # Set up environment variables for Wine
-        self._setup_wine_environment(config)
+        # Build environment variables for Wine (stored for later retrieval)
+        self._last_env = self._setup_wine_environment(config)
 
         command.append(str(wine_path))
         command.append(executable_path)
@@ -127,8 +158,8 @@ class CompatibilityManager:
             logger.warning("Proton not found, falling back to Wine")
             return self._get_wine_command(executable_path, config)
 
-        # Set up Proton environment
-        self._setup_proton_environment(config, proton_path)
+        # Build Proton environment (stored for later retrieval)
+        self._last_env = self._setup_proton_environment(config, proton_path)
 
         proton_run = proton_path / "proton"
         return [str(proton_run), "run", executable_path]
@@ -209,74 +240,103 @@ class CompatibilityManager:
 
         return None
 
-    def _setup_wine_environment(self, config: CompatibilityConfig) -> None:
-        """Set up environment variables for Wine."""
+    def _setup_wine_environment(self, config: CompatibilityConfig) -> dict[str, str]:
+        """
+        Build environment variables for Wine.
+
+        Returns a dict of environment variables to set. Does NOT modify os.environ.
+
+        Args:
+            config: Compatibility configuration
+
+        Returns:
+            Dictionary of environment variables for Wine
+        """
+        env: dict[str, str] = {}
+
         # Set Wine prefix
         if config.prefix_path:
-            os.environ["WINEPREFIX"] = str(config.prefix_path)
+            env["WINEPREFIX"] = str(config.prefix_path)
 
         # Windows version
-        os.environ["WINEARCH"] = "win64"
+        env["WINEARCH"] = "win64"
 
         # Esync/Fsync
         if config.esync_enabled:
-            os.environ["WINEESYNC"] = "1"
+            env["WINEESYNC"] = "1"
         if config.fsync_enabled:
-            os.environ["WINEFSYNC"] = "1"
+            env["WINEFSYNC"] = "1"
 
         # DXVK
         if config.dxvk_enabled:
-            os.environ["DXVK_LOG_LEVEL"] = "none"
+            env["DXVK_LOG_LEVEL"] = "none"
 
         # VKD3D
         if config.vkd3d_enabled:
-            os.environ["VKD3D_LOG_LEVEL"] = "none"
+            env["VKD3D_LOG_LEVEL"] = "none"
 
         # DLL overrides
         if config.dll_overrides:
             overrides = ";".join(
                 f"{dll}={mode}" for dll, mode in config.dll_overrides.items()
             )
-            os.environ["WINEDLLOVERRIDES"] = overrides
+            env["WINEDLLOVERRIDES"] = overrides
+
+        return env
 
     def _setup_proton_environment(
         self,
         config: CompatibilityConfig,
         proton_path: Path,
-    ) -> None:
-        """Set up environment variables for Proton."""
+    ) -> dict[str, str]:
+        """
+        Build environment variables for Proton.
+
+        Returns a dict of environment variables to set. Does NOT modify os.environ.
+
+        Args:
+            config: Compatibility configuration
+            proton_path: Path to Proton installation
+
+        Returns:
+            Dictionary of environment variables for Proton
+        """
+        env: dict[str, str] = {}
+
         # Proton uses STEAM_COMPAT_DATA_PATH for prefix
         if config.prefix_path:
-            os.environ["STEAM_COMPAT_DATA_PATH"] = str(config.prefix_path)
+            compat_data_path = str(config.prefix_path)
         else:
             # Default to proton data in profile
-            os.environ["STEAM_COMPAT_DATA_PATH"] = str(
-                Path.home() / ".proton" / "default"
-            )
+            compat_data_path = str(Path.home() / ".proton" / "default")
+
+        env["STEAM_COMPAT_DATA_PATH"] = compat_data_path
 
         # Ensure prefix directory exists
-        prefix_path = Path(os.environ["STEAM_COMPAT_DATA_PATH"])
+        prefix_path = Path(compat_data_path)
         prefix_path.mkdir(parents=True, exist_ok=True)
 
         # Steam runtime compatibility
-        os.environ["STEAM_COMPAT_CLIENT_INSTALL_PATH"] = str(
+        env["STEAM_COMPAT_CLIENT_INSTALL_PATH"] = str(
             Path.home() / ".steam" / "steam"
         )
 
         # Esync/Fsync
         if config.esync_enabled:
-            os.environ["PROTON_NO_ESYNC"] = "0"
+            env["PROTON_NO_ESYNC"] = "0"
         else:
-            os.environ["PROTON_NO_ESYNC"] = "1"
+            env["PROTON_NO_ESYNC"] = "1"
 
         if config.fsync_enabled:
-            os.environ["PROTON_NO_FSYNC"] = "0"
+            env["PROTON_NO_FSYNC"] = "0"
         else:
-            os.environ["PROTON_NO_FSYNC"] = "1"
+            env["PROTON_NO_FSYNC"] = "1"
 
         # DXVK
         if not config.dxvk_enabled:
-            os.environ["PROTON_USE_WINED3D"] = "1"
+            env["PROTON_USE_WINED3D"] = "1"
+
+        return env
 
     def detect_installed_layers(self) -> dict[str, list[str]]:
         """
