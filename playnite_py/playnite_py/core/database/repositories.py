@@ -66,6 +66,45 @@ T = TypeVar("T", bound=Base)
 M = TypeVar("M")
 
 
+from dataclasses import dataclass
+from typing import Generic as DataclassGeneric
+
+
+@dataclass
+class PagedResult(DataclassGeneric[M]):
+    """
+    Paginated result set.
+
+    Attributes:
+        items: List of items for the current page
+        total: Total number of items across all pages
+        page: Current page number (1-based)
+        page_size: Number of items per page
+        total_pages: Total number of pages
+    """
+    items: list[M]
+    total: int
+    page: int
+    page_size: int
+
+    @property
+    def total_pages(self) -> int:
+        """Calculate total number of pages."""
+        if self.page_size <= 0:
+            return 0
+        return (self.total + self.page_size - 1) // self.page_size
+
+    @property
+    def has_next(self) -> bool:
+        """Check if there's a next page."""
+        return self.page < self.total_pages
+
+    @property
+    def has_previous(self) -> bool:
+        """Check if there's a previous page."""
+        return self.page > 1
+
+
 class BaseRepository(Generic[T, M]):
     """
     Base repository class with common CRUD operations.
@@ -194,19 +233,49 @@ class ProfileRepository(BaseRepository[ProfileModel, Profile]):
                 return self._model_to_profile(model)
             return None
 
-    def get_all(self) -> list[Profile]:
+    def get_all(self, page: int = 0, page_size: int = 0) -> list[Profile] | PagedResult[Profile]:
         """
-        Get all profiles.
+        Get all profiles, optionally paginated.
+
+        Args:
+            page: Page number (1-based). If 0, returns all results without pagination.
+            page_size: Items per page. If 0, returns all results without pagination.
 
         Returns:
-            List of all profiles
+            List of profiles (if no pagination) or PagedResult (if paginated)
 
         Example:
-            >>> profiles = repo.get_all()
+            >>> profiles = repo.get_all()  # All profiles
+            >>> result = repo.get_all(page=1, page_size=10)  # First 10 profiles
+            >>> print(f"Page {result.page} of {result.total_pages}")
         """
         with self.db.session() as session:
-            models = session.execute(select(ProfileModel)).scalars().all()
-            return [self._model_to_profile(m) for m in models]
+            from sqlalchemy import func
+
+            # If no pagination, return all
+            if page <= 0 or page_size <= 0:
+                models = session.execute(select(ProfileModel)).scalars().all()
+                return [self._model_to_profile(m) for m in models]
+
+            # Get total count
+            total = session.execute(
+                select(func.count()).select_from(ProfileModel)
+            ).scalar_one()
+
+            # Get page
+            offset = (page - 1) * page_size
+            models = session.execute(
+                select(ProfileModel)
+                .offset(offset)
+                .limit(page_size)
+            ).scalars().all()
+
+            return PagedResult(
+                items=[self._model_to_profile(m) for m in models],
+                total=total,
+                page=page,
+                page_size=page_size,
+            )
 
     def get_active(self) -> Optional[Profile]:
         """

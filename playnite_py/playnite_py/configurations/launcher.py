@@ -26,7 +26,10 @@ import urllib.parse
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
+
+if TYPE_CHECKING:
+    from playnite_py.utils.logging import OperationMetrics
 from uuid import UUID
 
 from playnite_py.core.models.game import Game, GameAction, GameActionType
@@ -36,8 +39,10 @@ from playnite_py.core.models.configuration import (
 )
 from playnite_py.configurations.compatibility import CompatibilityManager
 from playnite_py.configurations.display import DisplayManager
+from playnite_py.configurations.sandbox import ScriptSandbox, SandboxConfig
+from playnite_py.utils.logging import get_logger, operation_context
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Security: Allowed URL protocols for URL actions (Gap 3 fix)
 ALLOWED_URL_PROTOCOLS = frozenset({
@@ -179,10 +184,16 @@ class GameLauncher:
         >>> result = launcher.launch_game(game, config)
     """
 
-    def __init__(self) -> None:
-        """Initialize the game launcher."""
+    def __init__(self, sandbox_enabled: bool = True) -> None:
+        """
+        Initialize the game launcher.
+
+        Args:
+            sandbox_enabled: Enable script sandboxing (default: True)
+        """
         self.compatibility_manager = CompatibilityManager()
         self.display_manager = DisplayManager()
+        self.sandbox = ScriptSandbox(SandboxConfig(enabled=sandbox_enabled))
         self._temp_files: list[Path] = []
         self._display_changed: bool = False
         self._display_monitor: Optional[str] = None
@@ -211,6 +222,23 @@ class GameLauncher:
             >>> if result.success:
             ...     print(f"Played for {result.duration_seconds // 60} minutes")
         """
+        with operation_context(
+            "launch_game",
+            game_id=str(game.id),
+            game_name=game.name,
+            config_id=str(config.id) if config else None,
+        ) as op:
+            return self._launch_game_internal(game, config, action, wait_for_exit, op)
+
+    def _launch_game_internal(
+        self,
+        game: Game,
+        config: Optional[PlatformConfiguration],
+        action: Optional[GameAction],
+        wait_for_exit: bool,
+        op: Any,
+    ) -> LaunchResult:
+        """Internal launch implementation with metrics tracking."""
         result = LaunchResult(success=False, game_id=game.id)
 
         if config:
@@ -221,6 +249,7 @@ class GameLauncher:
             action = game.get_default_action()
         if action is None:
             result.error_message = "No game action available"
+            op.metadata["error"] = "no_action"
             return result
 
         try:
@@ -541,7 +570,11 @@ class GameLauncher:
 
     def _run_script(self, script_content: str, script_type: str) -> bool:
         """
-        Run a pre or post launch script.
+        Run a pre or post launch script in a sandboxed environment.
+
+        Scripts are executed in a sandbox by default to prevent malicious
+        scripts from causing damage. The sandbox restricts network access
+        and filesystem writes.
 
         Args:
             script_content: Script content to execute
@@ -550,37 +583,26 @@ class GameLauncher:
         Returns:
             True if script succeeded, False otherwise
         """
-        try:
-            script_path = self._write_temp_script(script_content)
-            logger.debug(f"Running {script_type} script: {script_path}")
+        logger.debug(f"Running {script_type} script (sandboxed: {self.sandbox.config.enabled})")
 
-            if platform.system() == "Windows":
-                result = subprocess.run(
-                    ["powershell", "-ExecutionPolicy", "Bypass", "-File", str(script_path)],
-                    capture_output=True,
-                    timeout=60,
-                )
-            else:
-                result = subprocess.run(
-                    ["bash", str(script_path)],
-                    capture_output=True,
-                    timeout=60,
-                )
+        result = self.sandbox.execute_script(
+            script_content,
+            script_type=script_type,
+        )
 
-            if result.returncode != 0:
-                logger.warning(
-                    f"{script_type} script failed with code {result.returncode}"
-                )
-                return False
-
-            return True
-
-        except subprocess.TimeoutExpired:
-            logger.error(f"{script_type} script timed out")
+        if result.error_message:
+            logger.error(f"{script_type} script error: {result.error_message}")
             return False
-        except Exception as e:
-            logger.error(f"{script_type} script error: {e}")
+
+        if not result.success:
+            logger.warning(
+                f"{script_type} script failed with code {result.exit_code}"
+            )
+            if result.stderr:
+                logger.debug(f"Script stderr: {result.stderr}")
             return False
+
+        return True
 
     def _write_temp_script(self, content: str) -> Path:
         """Write script content to a temporary file."""

@@ -434,14 +434,30 @@ class ProfileManager:
         # Check password
         if profile.security.password_protected:
             if not password:
+                if profile.security.access_log_enabled:
+                    self.profile_repo.log_access(
+                        profile.id, "delete_attempt", success=False,
+                        details={"reason": "password_required"}
+                    )
                 raise PermissionError(f"Profile '{name}' is password protected")
             if not self.security_manager.verify_password(profile, password):
+                if profile.security.access_log_enabled:
+                    self.profile_repo.log_access(
+                        profile.id, "delete_attempt", success=False,
+                        details={"reason": "invalid_password"}
+                    )
                 raise PermissionError("Invalid password")
 
         # Check if locked by another instance
         profile_path = self._get_profile_path(profile)
         if self.lock_manager.is_locked(profile.id, profile_path):
             raise RuntimeError(f"Profile '{name}' is locked by another instance")
+
+        # Log successful delete before removal
+        if profile.security.access_log_enabled:
+            self.profile_repo.log_access(
+                profile.id, "delete", success=True
+            )
 
         # Delete from database
         self.profile_repo.delete(profile.id)
@@ -685,12 +701,29 @@ class ProfileManager:
         # Verify current password if profile is already protected
         if profile.security.password_protected:
             if not current_password:
+                if profile.security.access_log_enabled:
+                    self.profile_repo.log_access(
+                        profile.id, "password_change_attempt", success=False,
+                        details={"reason": "current_password_required"}
+                    )
                 raise PermissionError("Current password required")
             if not self.security_manager.verify_password(profile, current_password):
+                if profile.security.access_log_enabled:
+                    self.profile_repo.log_access(
+                        profile.id, "password_change_attempt", success=False,
+                        details={"reason": "invalid_current_password"}
+                    )
                 raise PermissionError("Invalid current password")
 
         self.security_manager.set_password(profile, password)
         self.profile_repo.update(profile)
+
+        # Log successful password change
+        if profile.security.access_log_enabled:
+            self.profile_repo.log_access(
+                profile.id, "password_set", success=True
+            )
+
         logger.info(f"Set password for profile: {name}")
 
     def remove_profile_password(
@@ -717,10 +750,22 @@ class ProfileManager:
             raise ValueError(f"Profile '{name}' is not password protected")
 
         if not self.security_manager.verify_password(profile, current_password):
+            if profile.security.access_log_enabled:
+                self.profile_repo.log_access(
+                    profile.id, "password_remove_attempt", success=False,
+                    details={"reason": "invalid_password"}
+                )
             raise PermissionError("Invalid password")
 
         self.security_manager.clear_password(profile)
         self.profile_repo.update(profile)
+
+        # Log successful password removal
+        if profile.security.access_log_enabled:
+            self.profile_repo.log_access(
+                profile.id, "password_removed", success=True
+            )
+
         logger.info(f"Removed password from profile: {name}")
 
     def export_profile(

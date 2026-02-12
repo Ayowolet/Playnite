@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any, Optional
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_serializer, field_validator
 
 
 class PlatformType(str, Enum):
@@ -456,11 +456,10 @@ class CompatibilityConfig(BaseModel):
         description="Custom pre-launch commands"
     )
 
-    model_config = {
-        "json_encoders": {
-            Path: str,
-        }
-    }
+    @field_serializer("layer_path", "prefix_path")
+    def serialize_path(self, v: Path | None) -> str | None:
+        """Serialize Path fields to strings."""
+        return str(v) if v else None
 
     @field_validator("layer_type")
     @classmethod
@@ -794,13 +793,20 @@ class PlatformConfiguration(BaseModel):
         description="Last modification"
     )
 
-    model_config = {
-        "json_encoders": {
-            Path: str,
-            datetime: lambda v: v.isoformat(),
-            UUID: str,
-        }
-    }
+    @field_serializer("id", "game_id", "fallback_config_id")
+    def serialize_uuid(self, v: UUID | None) -> str | None:
+        """Serialize UUID fields to strings."""
+        return str(v) if v else None
+
+    @field_serializer("working_directory")
+    def serialize_path(self, v: Path | None) -> str | None:
+        """Serialize Path fields to strings."""
+        return str(v) if v else None
+
+    @field_serializer("created_at", "modified_at")
+    def serialize_datetime(self, v: datetime) -> str:
+        """Serialize datetime to ISO format."""
+        return v.isoformat()
 
     def mark_modified(self) -> None:
         """Update the modified timestamp."""

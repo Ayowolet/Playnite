@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any, Optional
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_serializer, field_validator, model_validator
 
 
 class DataSharingMode(str, Enum):
@@ -596,28 +596,67 @@ class Profile(BaseModel):
         description="Path to profile icon"
     )
 
-    model_config = {
-        "json_encoders": {
-            Path: str,
-            datetime: lambda v: v.isoformat(),
-            UUID: str,
-        }
-    }
+    @field_serializer("id", "parent_profile_id", "created_from_template_id")
+    def serialize_uuid(self, v: UUID | None) -> str | None:
+        """Serialize UUID fields to strings."""
+        return str(v) if v else None
+
+    @field_serializer("data_directory", "icon_path")
+    def serialize_path(self, v: Path | None) -> str | None:
+        """Serialize Path fields to strings."""
+        return str(v) if v else None
 
     @field_validator("name")
     @classmethod
     def validate_name(cls, v: str) -> str:
         """
-        Validate profile name is filesystem-safe.
+        Validate and sanitize profile name for filesystem safety.
 
-        Names cannot contain characters that would cause issues
-        with directory creation on any supported platform.
+        Ensures names are safe for directory creation on all platforms
+        and prevents path injection attacks.
         """
-        invalid_chars = '<>:"/\\|?*'
+        import re
+
+        # Strip whitespace
+        v = v.strip()
+
+        # Check for empty name
+        if not v:
+            raise ValueError("Profile name cannot be empty")
+
+        # Check for invalid characters (Windows + Unix restrictions)
+        invalid_chars = '<>:"/\\|?*\x00'
         for char in invalid_chars:
             if char in v:
                 raise ValueError(f"Profile name cannot contain: {invalid_chars}")
-        return v.strip()
+
+        # Check for control characters
+        if any(ord(c) < 32 for c in v):
+            raise ValueError("Profile name cannot contain control characters")
+
+        # Check for reserved Windows names
+        reserved_names = {
+            "CON", "PRN", "AUX", "NUL",
+            "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+            "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+        }
+        name_upper = v.upper().split('.')[0]  # Check base name without extension
+        if name_upper in reserved_names:
+            raise ValueError(f"Profile name cannot be a reserved name: {name_upper}")
+
+        # Check for path traversal
+        if '..' in v or v.startswith('/') or v.startswith('~'):
+            raise ValueError("Profile name cannot contain path traversal sequences")
+
+        # Check for leading/trailing dots or spaces (problematic on Windows)
+        if v.startswith('.') or v.endswith('.') or v.endswith(' '):
+            raise ValueError("Profile name cannot start with '.' or end with '.' or space")
+
+        # Length limit (conservative for all filesystems)
+        if len(v) > 100:
+            raise ValueError("Profile name cannot exceed 100 characters")
+
+        return v
 
     @model_validator(mode="after")
     def set_data_directory(self) -> "Profile":

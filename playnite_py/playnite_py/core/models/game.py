@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any, Optional
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_serializer, field_validator
 
 
 class GameStatus(str, Enum):
@@ -169,12 +169,15 @@ class GameAction(BaseModel):
         description="Script content for script actions"
     )
 
-    model_config = {
-        "json_encoders": {
-            Path: str,
-            UUID: str,
-        }
-    }
+    @field_serializer("id", "emulator_id", "emulator_profile_id")
+    def serialize_uuid(self, v: UUID | None) -> str | None:
+        """Serialize UUID fields to strings."""
+        return str(v) if v else None
+
+    @field_serializer("working_directory")
+    def serialize_path(self, v: Path | None) -> str | None:
+        """Serialize Path fields to strings."""
+        return str(v) if v else None
 
 
 class GameMetadata(BaseModel):
@@ -279,11 +282,10 @@ class GameMetadata(BaseModel):
         description="Related URLs"
     )
 
-    model_config = {
-        "json_encoders": {
-            datetime: lambda v: v.isoformat() if v else None,
-        }
-    }
+    @field_serializer("release_date")
+    def serialize_datetime(self, v: datetime | None) -> str | None:
+        """Serialize datetime fields to ISO format."""
+        return v.isoformat() if v else None
 
 
 class GamePlayStatistics(BaseModel):
@@ -482,13 +484,25 @@ class Game(BaseModel):
         description="Platform configuration IDs"
     )
 
-    model_config = {
-        "json_encoders": {
-            Path: str,
-            datetime: lambda v: v.isoformat(),
-            UUID: str,
-        }
-    }
+    @field_serializer("id")
+    def serialize_uuid(self, v: UUID) -> str:
+        """Serialize UUID to string."""
+        return str(v)
+
+    @field_serializer("configuration_ids")
+    def serialize_uuid_list(self, v: list[UUID]) -> list[str]:
+        """Serialize UUID list to string list."""
+        return [str(u) for u in v]
+
+    @field_serializer("install_directory", "icon_path", "cover_image_path", "background_image_path")
+    def serialize_path(self, v: Path | None) -> str | None:
+        """Serialize Path fields to strings."""
+        return str(v) if v else None
+
+    @field_serializer("added_date", "modified_date")
+    def serialize_datetime(self, v: datetime) -> str:
+        """Serialize datetime to ISO format."""
+        return v.isoformat()
 
     @field_validator("name")
     @classmethod

@@ -7,6 +7,9 @@ and importing profiles from those archives.
 Export files use the .ppf (Playnite Profile File) extension and
 contain all profile data including database, settings, and media.
 
+Encrypted exports use the .ppfe extension and are protected with
+AES-256-GCM encryption using a PBKDF2-derived key.
+
 Example:
     >>> exporter = ProfileExporter()
     >>> exporter.export_profile(profile, profile_path, output_path)
@@ -19,7 +22,9 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import secrets
 import shutil
+import struct
 import tempfile
 import zipfile
 from datetime import datetime
@@ -32,6 +37,103 @@ logger = logging.getLogger(__name__)
 
 # Export format version for compatibility checking
 EXPORT_FORMAT_VERSION = "1.0"
+
+# Encryption constants
+ENCRYPTION_MAGIC = b"PPFE"  # Playnite Profile File Encrypted
+ENCRYPTION_VERSION = 1
+PBKDF2_ITERATIONS = 100_000
+SALT_SIZE = 16
+NONCE_SIZE = 12  # AES-GCM standard nonce size
+KEY_SIZE = 32  # AES-256
+
+
+def _derive_key(password: str, salt: bytes) -> bytes:
+    """Derive encryption key from password using PBKDF2-SHA256."""
+    return hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt,
+        PBKDF2_ITERATIONS,
+        dklen=KEY_SIZE,
+    )
+
+
+def _encrypt_data(data: bytes, password: str) -> bytes:
+    """
+    Encrypt data using AES-256-GCM.
+
+    Returns: magic (4) + version (1) + salt (16) + nonce (12) + tag (16) + ciphertext
+    """
+    try:
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    except ImportError:
+        raise ImportError(
+            "cryptography package required for encrypted exports. "
+            "Install with: pip install cryptography"
+        )
+
+    salt = secrets.token_bytes(SALT_SIZE)
+    nonce = secrets.token_bytes(NONCE_SIZE)
+    key = _derive_key(password, salt)
+
+    aesgcm = AESGCM(key)
+    ciphertext = aesgcm.encrypt(nonce, data, None)  # ciphertext includes tag
+
+    # Build encrypted file format
+    header = ENCRYPTION_MAGIC + struct.pack("B", ENCRYPTION_VERSION) + salt + nonce
+    return header + ciphertext
+
+
+def _decrypt_data(encrypted_data: bytes, password: str) -> bytes:
+    """
+    Decrypt AES-256-GCM encrypted data.
+
+    Parses: magic (4) + version (1) + salt (16) + nonce (12) + tag (16) + ciphertext
+    """
+    try:
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    except ImportError:
+        raise ImportError(
+            "cryptography package required for encrypted exports. "
+            "Install with: pip install cryptography"
+        )
+
+    # Parse header
+    header_size = len(ENCRYPTION_MAGIC) + 1 + SALT_SIZE + NONCE_SIZE
+    if len(encrypted_data) < header_size + 16:  # minimum: header + tag
+        raise ValueError("Invalid encrypted file: too small")
+
+    magic = encrypted_data[:4]
+    if magic != ENCRYPTION_MAGIC:
+        raise ValueError("Invalid encrypted file: bad magic number")
+
+    version = struct.unpack("B", encrypted_data[4:5])[0]
+    if version != ENCRYPTION_VERSION:
+        raise ValueError(f"Unsupported encryption version: {version}")
+
+    salt = encrypted_data[5:5 + SALT_SIZE]
+    nonce = encrypted_data[5 + SALT_SIZE:5 + SALT_SIZE + NONCE_SIZE]
+    ciphertext = encrypted_data[header_size:]
+
+    key = _derive_key(password, salt)
+    aesgcm = AESGCM(key)
+
+    try:
+        plaintext = aesgcm.decrypt(nonce, ciphertext, None)
+    except Exception:
+        raise ValueError("Decryption failed: invalid password or corrupt file")
+
+    return plaintext
+
+
+def is_encrypted_export(file_path: Path) -> bool:
+    """Check if an export file is encrypted."""
+    try:
+        with open(file_path, "rb") as f:
+            magic = f.read(4)
+            return magic == ENCRYPTION_MAGIC
+    except (OSError, IOError):
+        return False
 
 
 class ProfileExporter:
@@ -99,8 +201,11 @@ class ProfileExporter:
             raise FileNotFoundError(f"Profile path not found: {profile_path}")
 
         # Ensure output has correct extension
-        if not output_path.suffix == ".ppf":
-            output_path = output_path.with_suffix(".ppf")
+        expected_suffix = ".ppfe" if password else ".ppf"
+        if output_path.suffix not in (".ppf", ".ppfe"):
+            output_path = output_path.with_suffix(expected_suffix)
+        elif password and output_path.suffix == ".ppf":
+            output_path = output_path.with_suffix(".ppfe")
 
         # Ensure output directory exists
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -168,15 +273,11 @@ class ProfileExporter:
                 if plugins_path.exists() and plugins_path.is_dir():
                     shutil.copytree(plugins_path, staging / "plugins")
 
-            # Create archive
+            # Create archive (optionally encrypted)
             if password:
-                # TODO: Implement encrypted export
-                logger.warning(
-                    "Password protection not yet implemented, "
-                    "exporting without encryption"
-                )
-
-            self._create_archive(staging, output_path)
+                self._create_encrypted_archive(staging, output_path, password)
+            else:
+                self._create_archive(staging, output_path)
 
         logger.info(f"Exported profile '{profile.name}' to {output_path}")
         return output_path
@@ -220,6 +321,32 @@ class ProfileExporter:
                     arcname = file_path.relative_to(source_dir)
                     archive.write(file_path, arcname)
 
+    def _create_encrypted_archive(
+        self, source_dir: Path, output_path: Path, password: str
+    ) -> None:
+        """Create an encrypted archive from the source directory."""
+        import io
+
+        # First create the ZIP in memory
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(
+            zip_buffer, "w", compression=zipfile.ZIP_DEFLATED
+        ) as archive:
+            for file_path in source_dir.rglob("*"):
+                if file_path.is_file():
+                    arcname = file_path.relative_to(source_dir)
+                    archive.write(file_path, arcname)
+
+        # Encrypt the ZIP data
+        zip_data = zip_buffer.getvalue()
+        encrypted_data = _encrypt_data(zip_data, password)
+
+        # Write encrypted data to output
+        with open(output_path, "wb") as f:
+            f.write(encrypted_data)
+
+        logger.debug(f"Created encrypted archive: {output_path}")
+
 
 class ProfileImporter:
     """
@@ -243,18 +370,19 @@ class ProfileImporter:
         Read and validate an export file.
 
         Reads the manifest and profile data from an export archive
-        without extracting the full contents.
+        without extracting the full contents. Handles both encrypted
+        and unencrypted exports.
 
         Args:
-            import_path: Path to the .ppf file
-            password: Decryption password (if encrypted)
+            import_path: Path to the .ppf or .ppfe file
+            password: Decryption password (required for encrypted files)
 
         Returns:
             Dictionary containing profile metadata and settings
 
         Raises:
             FileNotFoundError: If file doesn't exist
-            ValueError: If file is invalid or incompatible
+            ValueError: If file is invalid, incompatible, or password is wrong/missing
 
         Example:
             >>> data = importer.read_export(Path("gaming.ppf"))
@@ -264,7 +392,18 @@ class ProfileImporter:
         if not import_path.exists():
             raise FileNotFoundError(f"Import file not found: {import_path}")
 
-        with zipfile.ZipFile(import_path, "r") as archive:
+        # Handle encrypted files
+        if is_encrypted_export(import_path):
+            if not password:
+                raise ValueError(
+                    "Export file is encrypted. Password required for decryption."
+                )
+            archive_data = self._decrypt_archive(import_path, password)
+            archive = zipfile.ZipFile(archive_data, "r")
+        else:
+            archive = zipfile.ZipFile(import_path, "r")
+
+        with archive:
             # Read manifest
             try:
                 manifest_content = archive.read("manifest.json")
@@ -307,6 +446,16 @@ class ProfileImporter:
             "statistics": manifest.get("statistics", {}),
         }
 
+    def _decrypt_archive(self, import_path: Path, password: str):
+        """Decrypt an encrypted export file and return a file-like object."""
+        import io
+
+        with open(import_path, "rb") as f:
+            encrypted_data = f.read()
+
+        decrypted_data = _decrypt_data(encrypted_data, password)
+        return io.BytesIO(decrypted_data)
+
     def import_to_path(
         self,
         import_path: Path,
@@ -317,16 +466,18 @@ class ProfileImporter:
         Extract an export file to a target directory.
 
         Extracts all contents from the archive to the target path,
-        creating the directory structure for a new profile.
+        creating the directory structure for a new profile. Handles
+        both encrypted and unencrypted exports.
 
         Args:
-            import_path: Path to the .ppf file
+            import_path: Path to the .ppf or .ppfe file
             target_path: Directory to extract to
-            password: Decryption password (if encrypted)
+            password: Decryption password (required for encrypted files)
 
         Raises:
             FileNotFoundError: If import file doesn't exist
             FileExistsError: If target path already exists with data
+            ValueError: If file is encrypted and password is wrong/missing
 
         Example:
             >>> importer.import_to_path(
@@ -340,7 +491,18 @@ class ProfileImporter:
         # Create target directory
         target_path.mkdir(parents=True, exist_ok=True)
 
-        with zipfile.ZipFile(import_path, "r") as archive:
+        # Handle encrypted files
+        if is_encrypted_export(import_path):
+            if not password:
+                raise ValueError(
+                    "Export file is encrypted. Password required for decryption."
+                )
+            archive_data = self._decrypt_archive(import_path, password)
+            archive = zipfile.ZipFile(archive_data, "r")
+        else:
+            archive = zipfile.ZipFile(import_path, "r")
+
+        with archive:
             # Extract all files
             for info in archive.infolist():
                 # Skip manifest and settings (handled separately)
@@ -352,14 +514,17 @@ class ProfileImporter:
 
         logger.info(f"Imported profile data to {target_path}")
 
-    def get_archive_info(self, import_path: Path) -> dict[str, Any]:
+    def get_archive_info(
+        self, import_path: Path, password: Optional[str] = None
+    ) -> dict[str, Any]:
         """
         Get information about an export archive.
 
         Returns metadata about the archive without fully reading it.
 
         Args:
-            import_path: Path to the .ppf file
+            import_path: Path to the .ppf or .ppfe file
+            password: Decryption password (required for encrypted files)
 
         Returns:
             Dictionary with archive information
@@ -373,9 +538,22 @@ class ProfileImporter:
             "modified": datetime.fromtimestamp(
                 import_path.stat().st_mtime
             ).isoformat(),
+            "encrypted": is_encrypted_export(import_path),
         }
 
-        with zipfile.ZipFile(import_path, "r") as archive:
+        # Handle encrypted files
+        if info["encrypted"]:
+            if not password:
+                # Return basic info without decrypting
+                info["profile_name"] = "Unknown (encrypted)"
+                info["file_count"] = None
+                return info
+            archive_data = self._decrypt_archive(import_path, password)
+            archive = zipfile.ZipFile(archive_data, "r")
+        else:
+            archive = zipfile.ZipFile(import_path, "r")
+
+        with archive:
             info["file_count"] = len(archive.namelist())
 
             # Get manifest if available
@@ -390,14 +568,17 @@ class ProfileImporter:
 
         return info
 
-    def validate_archive(self, import_path: Path) -> tuple[bool, list[str]]:
+    def validate_archive(
+        self, import_path: Path, password: Optional[str] = None
+    ) -> tuple[bool, list[str]]:
         """
         Validate an export archive.
 
         Checks that the archive is valid and contains required files.
 
         Args:
-            import_path: Path to the .ppf file
+            import_path: Path to the .ppf or .ppfe file
+            password: Decryption password (required for encrypted files)
 
         Returns:
             Tuple of (is_valid, list of error messages)
@@ -407,8 +588,24 @@ class ProfileImporter:
         if not import_path.exists():
             return False, ["File not found"]
 
+        # Check if encrypted
+        encrypted = is_encrypted_export(import_path)
+        if encrypted:
+            if not password:
+                return False, ["File is encrypted but no password provided"]
+            try:
+                archive_data = self._decrypt_archive(import_path, password)
+                archive = zipfile.ZipFile(archive_data, "r")
+            except ValueError as e:
+                return False, [str(e)]
+        else:
+            try:
+                archive = zipfile.ZipFile(import_path, "r")
+            except zipfile.BadZipFile:
+                return False, ["Invalid or corrupt archive file"]
+
         try:
-            with zipfile.ZipFile(import_path, "r") as archive:
+            with archive:
                 # Check for required files
                 names = archive.namelist()
 

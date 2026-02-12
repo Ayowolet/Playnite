@@ -40,6 +40,9 @@ def setup_logging(verbose: bool = False) -> None:
     )
 
 
+logger = logging.getLogger(__name__)
+
+
 class Context:
     """
     CLI context object for sharing state between commands.
@@ -180,8 +183,8 @@ def status(ctx: Context) -> None:
 
     try:
         current_profile = ctx.profile_manager.get_current_profile()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Could not get current profile: {e}")
 
     if ctx.json_output:
         data = {
