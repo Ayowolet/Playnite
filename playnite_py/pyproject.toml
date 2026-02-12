@@ -1,0 +1,104 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "playnite-py"
+version = "1.0.0"
+description = "A modern Python game library manager with multi-profile support and platform-specific configurations"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Playnite Python Team", email = "team@playnite-py.dev"}
+]
+requires-python = ">=3.10"
+keywords = ["gaming", "library", "manager", "profile", "configuration"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Games/Entertainment",
+]
+
+dependencies = [
+    "click>=8.1.0",
+    "rich>=13.0.0",
+    "pydantic>=2.0.0",
+    "sqlalchemy>=2.0.0",
+    "aiosqlite>=0.19.0",
+    "cryptography>=41.0.0",
+    "filelock>=3.12.0",
+    "platformdirs>=4.0.0",
+    "psutil>=5.9.0",
+    "pyyaml>=6.0.0",
+    "watchdog>=3.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.11.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.5.0",
+    "pre-commit>=3.4.0",
+]
+
+[project.scripts]
+playnite = "playnite_py.cli.main:cli"
+playnite-profile = "playnite_py.cli.profile_commands:profile_cli"
+
+[project.urls]
+"Homepage" = "https://github.com/playnite/playnite-py"
+"Documentation" = "https://playnite-py.readthedocs.io"
+"Bug Tracker" = "https://github.com/playnite/playnite-py/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["playnite_py*"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+select = ["E", "F", "W", "I", "N", "D", "UP", "ANN", "B", "C4", "SIM"]
+ignore = ["ANN101", "ANN102", "D100", "D104"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+markers = [
+    "slow: marks tests as slow",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
+
+[tool.coverage.run]
+source = ["playnite_py"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]
