@@ -13,6 +13,7 @@ Example:
 from __future__ import annotations
 
 import logging
+import os
 import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
@@ -230,7 +231,18 @@ class ProfileSharingManager:
 
         # Use consistent naming
         dest_path = game_dir / f"{media_type}{source_path.suffix}"
-        shutil.copy2(source_path, dest_path)
+
+        # Use atomic write to prevent partial reads during concurrent access:
+        # 1. Copy to temporary file
+        # 2. Atomically rename to target (os.replace is atomic on same filesystem)
+        temp_path = dest_path.with_suffix(dest_path.suffix + ".tmp")
+        try:
+            shutil.copy2(source_path, temp_path)
+            os.replace(temp_path, dest_path)
+        finally:
+            # Clean up temp file if rename failed
+            if temp_path.exists():
+                temp_path.unlink()
 
         logger.debug(f"Copied {media_type} to shared: {dest_path}")
         return dest_path
