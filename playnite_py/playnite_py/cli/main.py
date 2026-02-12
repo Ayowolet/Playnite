@@ -27,6 +27,7 @@ from playnite_py import __version__
 
 # Initialize console for rich output
 console = Console()
+console_stderr = Console(stderr=True)
 
 # Configure logging
 def setup_logging(verbose: bool = False) -> None:
@@ -98,7 +99,7 @@ class Context:
     def error(self, message: str) -> None:
         """Print error message."""
         if not self.json_output:
-            console.print(f"[red]✗[/red] {message}", err=True)
+            console_stderr.print(f"[red]✗[/red] {message}")
 
     def warning(self, message: str) -> None:
         """Print warning message."""
@@ -230,7 +231,7 @@ def main() -> None:
     try:
         cli()
     except Exception as e:
-        console.print(f"[red]Error:[/red] {e}", err=True)
+        console_stderr.print(f"[red]Error:[/red] {e}")
         sys.exit(1)
 
 

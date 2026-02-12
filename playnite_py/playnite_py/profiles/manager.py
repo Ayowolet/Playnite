@@ -125,7 +125,28 @@ class ProfileManager:
         # Initialize builtin templates
         self._ensure_builtin_templates()
 
+        # Auto-load previously active profile
+        self._restore_active_profile()
+
         logger.info(f"ProfileManager initialized with data directory: {self.data_dir}")
+
+    def _restore_active_profile(self) -> None:
+        """Restore the previously active profile from database."""
+        active_profile = self.profile_repo.get_active()
+        if active_profile:
+            try:
+                profile_path = self._get_profile_path(active_profile)
+                if profile_path.exists():
+                    lock = self.lock_manager.acquire_lock(active_profile.id, profile_path)
+                    self.current_profile = active_profile
+                    self._current_lock = lock
+                    self._current_profile_db = DatabaseEngine.create_for_profile(profile_path)
+                    logger.debug(f"Restored active profile: {active_profile.name}")
+            except Exception as e:
+                logger.warning(f"Could not restore active profile: {e}")
+                # Mark as inactive if restoration fails
+                active_profile.is_active = False
+                self.profile_repo.update(active_profile)
 
     def _ensure_builtin_templates(self) -> None:
         """Ensure builtin profile templates exist."""

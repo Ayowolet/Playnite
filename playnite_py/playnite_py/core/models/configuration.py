@@ -852,7 +852,7 @@ class PlatformConfiguration(BaseModel):
         """
         return cls.model_validate(data)
 
-    def validate_configuration(self) -> list[str]:
+    def validate_configuration(self) -> tuple[bool, list[str]]:
         """
         Validate the configuration for common issues.
 
@@ -860,14 +860,14 @@ class PlatformConfiguration(BaseModel):
         other potential problems.
 
         Returns:
-            List of validation error messages (empty if valid)
+            Tuple of (is_valid, errors) where is_valid is True if no errors
 
         Example:
             >>> config = PlatformConfiguration(
             ...     name="Test", game_id=uuid4(),
-            ...     display=DisplayConfig(width=100, height=100)
+            ...     display=DisplayConfig(width=1920, height=1080)
             ... )
-            >>> errors = config.validate_configuration()
+            >>> is_valid, errors = config.validate_configuration()
         """
         errors = []
 
@@ -894,4 +894,4 @@ class PlatformConfiguration(BaseModel):
                 f"Working directory not found: {self.working_directory}"
             )
 
-        return errors
+        return (len(errors) == 0, errors)

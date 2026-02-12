@@ -137,10 +137,10 @@ class ProfileRepository(BaseRepository[ProfileModel, Profile]):
                 id=str(profile.id),
                 name=profile.name,
                 description=profile.description,
-                settings_json=profile.settings.model_dump(),
-                statistics_json=profile.statistics.model_dump(),
-                security_json=profile.security.model_dump(),
-                sharing_json=profile.sharing.model_dump(),
+                settings_json=profile.settings.model_dump(mode='json'),
+                statistics_json=profile.statistics.model_dump(mode='json'),
+                security_json=profile.security.model_dump(mode='json'),
+                sharing_json=profile.sharing.model_dump(mode='json'),
                 parent_profile_id=str(profile.parent_profile_id) if profile.parent_profile_id else None,
                 data_directory=str(profile.data_directory) if profile.data_directory else None,
                 is_active=profile.is_active,
@@ -262,10 +262,10 @@ class ProfileRepository(BaseRepository[ProfileModel, Profile]):
 
             model.name = profile.name
             model.description = profile.description
-            model.settings_json = profile.settings.model_dump()
-            model.statistics_json = profile.statistics.model_dump()
-            model.security_json = profile.security.model_dump()
-            model.sharing_json = profile.sharing.model_dump()
+            model.settings_json = profile.settings.model_dump(mode='json')
+            model.statistics_json = profile.statistics.model_dump(mode='json')
+            model.security_json = profile.security.model_dump(mode='json')
+            model.sharing_json = profile.sharing.model_dump(mode='json')
             model.parent_profile_id = str(profile.parent_profile_id) if profile.parent_profile_id else None
             model.data_directory = str(profile.data_directory) if profile.data_directory else None
             model.is_active = profile.is_active
@@ -404,8 +404,8 @@ class ProfileTemplateRepository(BaseRepository[ProfileTemplateModel, ProfileTemp
                 id=str(template.id),
                 name=template.name,
                 description=template.description,
-                settings_json=template.settings.model_dump(),
-                sharing_json=template.sharing.model_dump(),
+                settings_json=template.settings.model_dump(mode='json'),
+                sharing_json=template.sharing.model_dump(mode='json'),
                 is_builtin=template.is_builtin,
                 source_profile_id=str(template.source_profile_id) if template.source_profile_id else None,
             )
@@ -502,9 +502,9 @@ class GameRepository(BaseRepository[GameModel, Game]):
                 source=game.source.value,
                 source_game_id=game.source_game_id,
                 status=game.status.value,
-                metadata_json=game.metadata.model_dump(),
-                statistics_json=game.statistics.model_dump(),
-                actions_json=[a.model_dump() for a in game.actions],
+                metadata_json=game.metadata.model_dump(mode='json'),
+                statistics_json=game.statistics.model_dump(mode='json'),
+                actions_json=[a.model_dump(mode='json') for a in game.actions],
                 install_directory=str(game.install_directory) if game.install_directory else None,
                 icon_path=str(game.icon_path) if game.icon_path else None,
                 cover_image_path=str(game.cover_image_path) if game.cover_image_path else None,
@@ -587,9 +587,9 @@ class GameRepository(BaseRepository[GameModel, Game]):
             model.source = game.source.value
             model.source_game_id = game.source_game_id
             model.status = game.status.value
-            model.metadata_json = game.metadata.model_dump()
-            model.statistics_json = game.statistics.model_dump()
-            model.actions_json = [a.model_dump() for a in game.actions]
+            model.metadata_json = game.metadata.model_dump(mode='json')
+            model.statistics_json = game.statistics.model_dump(mode='json')
+            model.actions_json = [a.model_dump(mode='json') for a in game.actions]
             model.install_directory = str(game.install_directory) if game.install_directory else None
             model.icon_path = str(game.icon_path) if game.icon_path else None
             model.cover_image_path = str(game.cover_image_path) if game.cover_image_path else None
@@ -663,11 +663,11 @@ class ConfigurationRepository(BaseRepository[ConfigurationModel, PlatformConfigu
                 game_id=str(config.game_id),
                 platform_type=config.platform_type.value,
                 graphics_quality=config.graphics_quality.value,
-                display_json=config.display.model_dump(),
-                audio_json=config.audio.model_dump(),
-                launch_args_json=config.launch_args.model_dump(),
-                environment_json=config.environment.model_dump(),
-                compatibility_json=config.compatibility.model_dump(),
+                display_json=config.display.model_dump(mode='json'),
+                audio_json=config.audio.model_dump(mode='json'),
+                launch_args_json=config.launch_args.model_dump(mode='json'),
+                environment_json=config.environment.model_dump(mode='json'),
+                compatibility_json=config.compatibility.model_dump(mode='json'),
                 working_directory=str(config.working_directory) if config.working_directory else None,
                 pre_launch_script=config.pre_launch_script,
                 post_launch_script=config.post_launch_script,
@@ -675,7 +675,7 @@ class ConfigurationRepository(BaseRepository[ConfigurationModel, PlatformConfigu
                 is_enabled=config.is_enabled,
                 fallback_config_id=str(config.fallback_config_id) if config.fallback_config_id else None,
                 priority=config.priority,
-                statistics_json=config.statistics.model_dump(),
+                statistics_json=config.statistics.model_dump(mode='json'),
                 hardware_requirements=config.hardware_requirements,
                 tags=config.tags,
             )
@@ -743,11 +743,11 @@ class ConfigurationRepository(BaseRepository[ConfigurationModel, PlatformConfigu
             model.description = config.description
             model.platform_type = config.platform_type.value
             model.graphics_quality = config.graphics_quality.value
-            model.display_json = config.display.model_dump()
-            model.audio_json = config.audio.model_dump()
-            model.launch_args_json = config.launch_args.model_dump()
-            model.environment_json = config.environment.model_dump()
-            model.compatibility_json = config.compatibility.model_dump()
+            model.display_json = config.display.model_dump(mode='json')
+            model.audio_json = config.audio.model_dump(mode='json')
+            model.launch_args_json = config.launch_args.model_dump(mode='json')
+            model.environment_json = config.environment.model_dump(mode='json')
+            model.compatibility_json = config.compatibility.model_dump(mode='json')
             model.working_directory = str(config.working_directory) if config.working_directory else None
             model.pre_launch_script = config.pre_launch_script
             model.post_launch_script = config.post_launch_script
@@ -755,7 +755,7 @@ class ConfigurationRepository(BaseRepository[ConfigurationModel, PlatformConfigu
             model.is_enabled = config.is_enabled
             model.fallback_config_id = str(config.fallback_config_id) if config.fallback_config_id else None
             model.priority = config.priority
-            model.statistics_json = config.statistics.model_dump()
+            model.statistics_json = config.statistics.model_dump(mode='json')
             model.hardware_requirements = config.hardware_requirements
             model.tags = config.tags
 
@@ -835,11 +835,11 @@ class ConfigurationTemplateRepository(BaseRepository[ConfigurationTemplateModel,
                 description=template.description,
                 platform_type=template.platform_type.value,
                 graphics_quality=template.graphics_quality.value,
-                display_json=template.display.model_dump(),
-                audio_json=template.audio.model_dump(),
-                launch_args_json=template.launch_args.model_dump(),
-                environment_json=template.environment.model_dump(),
-                compatibility_json=template.compatibility.model_dump(),
+                display_json=template.display.model_dump(mode='json'),
+                audio_json=template.audio.model_dump(mode='json'),
+                launch_args_json=template.launch_args.model_dump(mode='json'),
+                environment_json=template.environment.model_dump(mode='json'),
+                compatibility_json=template.compatibility.model_dump(mode='json'),
                 is_builtin=template.is_builtin,
             )
             session.add(model)

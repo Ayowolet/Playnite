@@ -286,16 +286,18 @@ class TestPlatformConfiguration:
 
     def test_configuration_validation_bad_resolution(self):
         """Test configuration validation with invalid resolution."""
-        game_id = uuid4()
-        config = PlatformConfiguration(
-            name="Test",
-            game_id=game_id,
-            display=DisplayConfig(width=100, height=100),
-        )
+        import pytest
+        from pydantic import ValidationError
 
-        is_valid, errors = config.validate_configuration()
-        assert is_valid is False
-        assert len(errors) > 0
+        game_id = uuid4()
+        # DisplayConfig validates at creation time, so invalid resolution
+        # should raise a ValidationError
+        with pytest.raises(ValidationError):
+            PlatformConfiguration(
+                name="Test",
+                game_id=game_id,
+                display=DisplayConfig(width=100, height=100),
+            )
 
     def test_configuration_serialization(self):
         """Test configuration serialization."""

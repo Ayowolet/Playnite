@@ -24,6 +24,7 @@ from playnite_py.core.models.game import (
     GameAction,
     GameActionType,
     GameMetadata,
+    GamePlayStatistics,
     GameStatus,
     GameSource,
 )
@@ -54,6 +55,7 @@ __all__ = [
     "GameAction",
     "GameActionType",
     "GameMetadata",
+    "GamePlayStatistics",
     "GameStatus",
     "GameSource",
     # Configuration models

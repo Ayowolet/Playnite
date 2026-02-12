@@ -139,10 +139,16 @@ class ProfileExporter:
                     shutil.copy2(db_path, staging / "library.db")
 
                     # Also copy WAL and SHM files if they exist
+                    # Use try-except to handle race condition where SQLite
+                    # may checkpoint and delete these files between check and copy
                     for suffix in ["-wal", "-shm"]:
                         wal_path = profile_path / f"library.db{suffix}"
-                        if wal_path.exists():
-                            shutil.copy2(wal_path, staging / f"library.db{suffix}")
+                        try:
+                            if wal_path.exists():
+                                shutil.copy2(wal_path, staging / f"library.db{suffix}")
+                        except FileNotFoundError:
+                            # File was deleted between exists() check and copy
+                            pass
 
             # Copy media files
             if include_media:

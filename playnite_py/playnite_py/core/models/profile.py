@@ -653,14 +653,13 @@ class Profile(BaseModel):
 
         # Start with parent settings
         merged_data = parent.settings.model_dump()
-        # Override with child settings (non-default values)
+        # Override with child settings (explicitly set values)
         child_data = self.settings.model_dump()
 
-        # Only override if child has explicitly set the value
-        defaults = ProfileSettings().model_dump()
-        for key, value in child_data.items():
-            if value != defaults.get(key):
-                merged_data[key] = value
+        # Use model_fields_set to check which fields were explicitly set
+        # This handles the case where child sets a value that matches the default
+        for key in self.settings.model_fields_set:
+            merged_data[key] = child_data[key]
 
         return ProfileSettings(**merged_data)
 
