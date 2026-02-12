@@ -35,6 +35,7 @@ from playnite_py.core.models.configuration import (
     CompatibilityConfig,
 )
 from playnite_py.configurations.compatibility import CompatibilityManager
+from playnite_py.configurations.display import DisplayManager
 
 logger = logging.getLogger(__name__)
 
@@ -181,7 +182,10 @@ class GameLauncher:
     def __init__(self) -> None:
         """Initialize the game launcher."""
         self.compatibility_manager = CompatibilityManager()
+        self.display_manager = DisplayManager()
         self._temp_files: list[Path] = []
+        self._display_changed: bool = False
+        self._display_monitor: Optional[str] = None
 
     def launch_game(
         self,
@@ -220,6 +224,23 @@ class GameLauncher:
             return result
 
         try:
+            # Apply display configuration if specified (with race condition prevention)
+            self._display_changed = False
+            self._display_monitor = None
+            if config and config.display:
+                display_result = self.display_manager.apply_display_config(
+                    config.display,
+                    verify_target=True,  # Verify monitor exists before changing
+                )
+                if display_result.success and display_result.applied_config:
+                    self._display_changed = True
+                    self._display_monitor = config.display.target_monitor
+                    logger.info(
+                        f"Applied display config: {config.display.width}x{config.display.height}"
+                    )
+                elif display_result.error_message:
+                    logger.warning(f"Display config failed: {display_result.error_message}")
+
             # Run pre-launch script if configured
             if config and config.pre_launch_script:
                 self._run_script(config.pre_launch_script, "pre-launch")
@@ -278,6 +299,14 @@ class GameLauncher:
             # Run post-launch script
             if config and config.post_launch_script:
                 self._run_script(config.post_launch_script, "post-launch")
+
+            # Rollback display settings if changed and game has exited
+            if self._display_changed and wait_for_exit and self._display_monitor:
+                rollback_result = self.display_manager.rollback(self._display_monitor)
+                if rollback_result.success:
+                    logger.info("Restored previous display settings")
+                else:
+                    logger.warning(f"Display rollback failed: {rollback_result.error_message}")
 
             # Clean up temp files
             self._cleanup_temp_files()
