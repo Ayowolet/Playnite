@@ -16,12 +16,80 @@ import os
 import platform
 import shutil
 import subprocess
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Optional
 
 from playnite_py.core.models.configuration import CompatibilityConfig
 
 logger = logging.getLogger(__name__)
+
+
+# Windows executable extensions
+WINDOWS_EXECUTABLE_EXTENSIONS = frozenset({'.exe', '.msi', '.bat', '.cmd', '.com'})
+
+
+def _normalize_path(path: str) -> Path:
+    """
+    Normalize a path by expanding ~ and resolving . and .. components.
+
+    Args:
+        path: Path string to normalize
+
+    Returns:
+        Normalized Path object
+    """
+    return Path(path).expanduser().resolve()
+
+
+def _convert_unix_to_wine_path(
+    unix_path: str,
+    prefix_path: Optional[Path] = None,
+) -> str:
+    """
+    Convert a Unix path to a Wine-compatible path.
+
+    If the path is inside the Wine prefix's drive_c, converts to a C: path.
+    Otherwise, returns the original path (Wine maps it via Z: drive).
+
+    Args:
+        unix_path: Unix path to convert
+        prefix_path: Wine prefix path (e.g., ~/.wine)
+
+    Returns:
+        Wine-compatible path string
+    """
+    normalized = _normalize_path(unix_path)
+
+    # Check if path is inside Wine prefix's drive_c
+    if prefix_path:
+        prefix_path = _normalize_path(str(prefix_path))
+        drive_c = prefix_path / "drive_c"
+
+        try:
+            # Get relative path from drive_c
+            relative = normalized.relative_to(drive_c)
+            # Convert to Windows path format
+            windows_path = PureWindowsPath("C:/") / relative
+            return str(windows_path)
+        except ValueError:
+            # Path is not inside drive_c, use original
+            pass
+
+    # Return original path - Wine will map via Z: drive
+    return str(normalized)
+
+
+def _is_windows_executable(path: str) -> bool:
+    """
+    Check if a path appears to be a Windows executable.
+
+    Args:
+        path: Path to check
+
+    Returns:
+        True if path has a Windows executable extension
+    """
+    return Path(path).suffix.lower() in WINDOWS_EXECUTABLE_EXTENSIONS
 
 
 class CompatibilityManager:
@@ -141,8 +209,20 @@ class CompatibilityManager:
         # Build environment variables for Wine (stored for later retrieval)
         self._last_env = self._setup_wine_environment(config)
 
+        # Normalize and convert path for Wine
+        converted_path = _convert_unix_to_wine_path(
+            executable_path,
+            config.prefix_path,
+        )
+
+        # Warn if not a Windows executable
+        if not _is_windows_executable(executable_path):
+            logger.warning(
+                f"Path '{executable_path}' does not appear to be a Windows executable"
+            )
+
         command.append(str(wine_path))
-        command.append(executable_path)
+        command.append(converted_path)
 
         return command
 
@@ -161,8 +241,20 @@ class CompatibilityManager:
         # Build Proton environment (stored for later retrieval)
         self._last_env = self._setup_proton_environment(config, proton_path)
 
+        # Normalize and convert path for Proton
+        converted_path = _convert_unix_to_wine_path(
+            executable_path,
+            config.prefix_path,
+        )
+
+        # Warn if not a Windows executable
+        if not _is_windows_executable(executable_path):
+            logger.warning(
+                f"Path '{executable_path}' does not appear to be a Windows executable"
+            )
+
         proton_run = proton_path / "proton"
-        return [str(proton_run), "run", executable_path]
+        return [str(proton_run), "run", converted_path]
 
     def _get_crossover_command(
         self,
@@ -174,7 +266,16 @@ class CompatibilityManager:
         if platform.system() == "Darwin":
             crossover_path = Path("/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine")
             if crossover_path.exists():
-                return [str(crossover_path), executable_path]
+                # Set up Wine environment (CrossOver uses Wine under the hood)
+                self._last_env = self._setup_wine_environment(config)
+
+                # Normalize and convert path
+                converted_path = _convert_unix_to_wine_path(
+                    executable_path,
+                    config.prefix_path,
+                )
+
+                return [str(crossover_path), converted_path]
 
         logger.warning("CrossOver not found")
         return self._get_wine_command(executable_path, config)
@@ -188,7 +289,16 @@ class CompatibilityManager:
         # Whisky is a macOS Wine wrapper
         whisky_wine = Path("~/Library/Application Support/Whisky/Wine/bin/wine").expanduser()
         if whisky_wine.exists():
-            return [str(whisky_wine), executable_path]
+            # Set up Wine environment (Whisky uses Wine under the hood)
+            self._last_env = self._setup_wine_environment(config)
+
+            # Normalize and convert path
+            converted_path = _convert_unix_to_wine_path(
+                executable_path,
+                config.prefix_path,
+            )
+
+            return [str(whisky_wine), converted_path]
 
         logger.warning("Whisky not found")
         return self._get_wine_command(executable_path, config)
@@ -199,14 +309,43 @@ class CompatibilityManager:
         config: CompatibilityConfig,
     ) -> list[str]:
         """Build Apple Game Porting Toolkit command."""
-        # GPTK on macOS
-        gptk_wine = Path("/usr/local/opt/game-porting-toolkit/bin/wine64")
-        if gptk_wine.exists():
-            return [str(gptk_wine), executable_path]
+        gptk_wine: Optional[Path] = None
 
-        # Try Homebrew path
-        gptk_wine = Path("$(brew --prefix game-porting-toolkit)/bin/wine64")
-        return [str(gptk_wine), executable_path]
+        # GPTK on macOS - check standard installation path
+        standard_path = Path("/usr/local/opt/game-porting-toolkit/bin/wine64")
+        if standard_path.exists():
+            gptk_wine = standard_path
+        else:
+            # Try to find via Homebrew (properly execute the command)
+            try:
+                result = subprocess.run(
+                    ["brew", "--prefix", "game-porting-toolkit"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                if result.returncode == 0:
+                    brew_prefix = Path(result.stdout.strip())
+                    brew_wine = brew_prefix / "bin" / "wine64"
+                    if brew_wine.exists():
+                        gptk_wine = brew_wine
+            except (subprocess.SubprocessError, FileNotFoundError, OSError):
+                pass
+
+        if gptk_wine:
+            # Set up Wine environment (GPTK uses Wine under the hood)
+            self._last_env = self._setup_wine_environment(config)
+
+            # Normalize and convert path
+            converted_path = _convert_unix_to_wine_path(
+                executable_path,
+                config.prefix_path,
+            )
+
+            return [str(gptk_wine), converted_path]
+
+        logger.warning("Game Porting Toolkit not found")
+        return self._get_wine_command(executable_path, config)
 
     def _find_wine(self, custom_path: Optional[Path] = None) -> Optional[str]:
         """Find Wine executable."""
