@@ -19,6 +19,7 @@ Example:
 
 from __future__ import annotations
 
+import shlex
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
@@ -245,6 +246,9 @@ class LaunchArguments(BaseModel):
         Otherwise, starts with base_arguments, removes any
         arguments in remove_arguments, and appends add_arguments.
 
+        Uses shlex.split() for proper handling of quoted arguments
+        to prevent argument injection vulnerabilities.
+
         Returns:
             Final argument string for execution
 
@@ -260,8 +264,16 @@ class LaunchArguments(BaseModel):
         if self.replace_arguments is not None:
             return self.replace_arguments
 
-        # Start with base arguments
-        result_args = self.base_arguments.split() if self.base_arguments else []
+        # Start with base arguments - use shlex.split for proper quote handling
+        # This fixes Gap 5: Naive argument splitting
+        if self.base_arguments:
+            try:
+                result_args = shlex.split(self.base_arguments)
+            except ValueError:
+                # Fallback to simple split if shlex fails (malformed quotes)
+                result_args = self.base_arguments.split()
+        else:
+            result_args = []
 
         # Remove specified arguments
         for remove_arg in self.remove_arguments:
@@ -274,7 +286,8 @@ class LaunchArguments(BaseModel):
         # Add new arguments
         result_args.extend(self.add_arguments)
 
-        return self.argument_separator.join(result_args)
+        # Use shlex.join for proper quoting of arguments with spaces
+        return shlex.join(result_args)
 
 
 class EnvironmentConfig(BaseModel):

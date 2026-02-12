@@ -16,10 +16,13 @@ from __future__ import annotations
 import logging
 import os
 import platform
+import re
+import shlex
 import shutil
 import subprocess
 import tempfile
 import time
+import urllib.parse
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -34,6 +37,100 @@ from playnite_py.core.models.configuration import (
 from playnite_py.configurations.compatibility import CompatibilityManager
 
 logger = logging.getLogger(__name__)
+
+# Security: Allowed URL protocols for URL actions (Gap 3 fix)
+ALLOWED_URL_PROTOCOLS = frozenset({
+    "http", "https",          # Web URLs
+    "steam",                  # Steam protocol
+    "uplay", "ubisoft",       # Ubisoft
+    "origin",                 # EA/Origin
+    "com.epicgames.launcher", # Epic Games
+    "battlenet",              # Battle.net
+    "gog",                    # GOG Galaxy
+    "rungameid",              # Generic game launcher
+})
+
+# Security: Patterns that indicate potentially dangerous arguments
+DANGEROUS_ARG_PATTERNS = re.compile(
+    r'[;&|`$]|'           # Shell metacharacters
+    r'\.\.[/\\]|'         # Path traversal
+    r'^-[a-z]*n\b',       # Arguments that might enable "dry-run" bypass
+    flags=re.IGNORECASE
+)
+
+
+def _sanitize_argument(arg: str) -> str:
+    """
+    Sanitize a single argument for safe execution.
+
+    Removes or escapes potentially dangerous characters while
+    preserving the argument's intended functionality.
+
+    Args:
+        arg: The argument to sanitize
+
+    Returns:
+        Sanitized argument string
+    """
+    # Remove null bytes
+    arg = arg.replace('\x00', '')
+    # Remove newlines/carriage returns (argument injection)
+    arg = arg.replace('\n', '').replace('\r', '')
+    return arg
+
+
+def _validate_executable_path(path: str) -> tuple[bool, str]:
+    """
+    Validate an executable path for security issues.
+
+    Args:
+        path: The executable path to validate
+
+    Returns:
+        Tuple of (is_valid, error_message)
+    """
+    if not path:
+        return False, "Empty executable path"
+
+    # Check for path traversal
+    if '..' in path:
+        return False, "Path traversal detected in executable path"
+
+    # Check for shell metacharacters in path
+    if any(c in path for c in ';|&`$'):
+        return False, "Shell metacharacters detected in executable path"
+
+    # Resolve to absolute path and check existence
+    resolved = Path(path).resolve()
+    if not resolved.exists():
+        return False, f"Executable not found: {path}"
+
+    return True, ""
+
+
+def _validate_url(url: str) -> tuple[bool, str]:
+    """
+    Validate a URL for allowed protocols.
+
+    Args:
+        url: The URL to validate
+
+    Returns:
+        Tuple of (is_valid, error_message)
+    """
+    try:
+        parsed = urllib.parse.urlparse(url)
+        protocol = parsed.scheme.lower()
+
+        if not protocol:
+            return False, "URL has no protocol scheme"
+
+        if protocol not in ALLOWED_URL_PROTOCOLS:
+            return False, f"URL protocol '{protocol}' not allowed. Allowed: {', '.join(sorted(ALLOWED_URL_PROTOCOLS))}"
+
+        return True, ""
+    except Exception as e:
+        return False, f"Invalid URL: {e}"
 
 
 @dataclass
@@ -207,6 +304,9 @@ class GameLauncher:
         """
         Build the command to launch the game.
 
+        Includes security validation for executable paths, arguments,
+        and URLs to prevent injection attacks.
+
         Args:
             game: Game being launched
             action: Action to execute
@@ -222,6 +322,12 @@ class GameLauncher:
             if not action.path:
                 return None
 
+            # Security: Validate executable path (Gap 2 fix)
+            is_valid, error = _validate_executable_path(action.path)
+            if not is_valid:
+                logger.error(f"Security: {error}")
+                return None
+
             # Check for compatibility layer on Linux
             if platform.system() == "Linux" and config:
                 compat_cmd = self.compatibility_manager.get_launch_command(
@@ -234,20 +340,39 @@ class GameLauncher:
             else:
                 command.append(action.path)
 
-            # Add arguments
+            # Add arguments - use shlex.split for proper parsing (Gap 1 & 5 fix)
             if config and config.launch_args:
-                # Get modified arguments from config
                 action_args = action.arguments or ""
                 config.launch_args.base_arguments = action_args
                 final_args = config.launch_args.get_final_arguments()
                 if final_args:
-                    command.extend(final_args.split())
+                    # Security: Use shlex.split to properly handle quoted arguments
+                    # and prevent argument injection
+                    try:
+                        parsed_args = shlex.split(final_args)
+                        # Sanitize each argument
+                        command.extend(_sanitize_argument(arg) for arg in parsed_args)
+                    except ValueError as e:
+                        logger.warning(f"Failed to parse arguments '{final_args}': {e}")
+                        # Fall back to simple split but sanitize
+                        command.extend(_sanitize_argument(arg) for arg in final_args.split())
             elif action.arguments:
-                command.extend(action.arguments.split())
+                try:
+                    parsed_args = shlex.split(action.arguments)
+                    command.extend(_sanitize_argument(arg) for arg in parsed_args)
+                except ValueError:
+                    command.extend(_sanitize_argument(arg) for arg in action.arguments.split())
 
         elif action.type == GameActionType.URL:
             if not action.path:
                 return None
+
+            # Security: Validate URL protocol (Gap 3 fix)
+            is_valid, error = _validate_url(action.path)
+            if not is_valid:
+                logger.error(f"Security: {error}")
+                return None
+
             # Open URL with system browser
             if platform.system() == "Linux":
                 command = ["xdg-open", action.path]
@@ -259,6 +384,13 @@ class GameLauncher:
         elif action.type == GameActionType.SCRIPT:
             if not action.script_content:
                 return None
+
+            # Security warning for script execution (Gap 4 fix)
+            logger.warning(
+                "Security: Executing user-provided script. "
+                "Script content should be reviewed for malicious code."
+            )
+
             # Write script to temp file and execute
             script_path = self._write_temp_script(action.script_content)
             if platform.system() == "Windows":
@@ -308,6 +440,24 @@ class GameLauncher:
 
         return None
 
+    # Security: Variables that should never be expanded to prevent info disclosure (Gap 6 fix)
+    SENSITIVE_ENV_VARS = frozenset({
+        # Authentication/Secrets
+        "PASSWORD", "SECRET", "TOKEN", "API_KEY", "APIKEY", "AUTH",
+        "PRIVATE_KEY", "AWS_SECRET", "AZURE_SECRET", "GCP_SECRET",
+        # SSH/Security
+        "SSH_AUTH_SOCK", "SSH_AGENT_PID", "GPG_AGENT_INFO",
+        # Database credentials
+        "DATABASE_URL", "DB_PASSWORD", "MYSQL_PASSWORD", "PGPASSWORD",
+        # Common sensitive patterns
+        "CREDENTIAL", "PASS", "KEY", "CERT",
+    })
+
+    def _is_sensitive_var(self, var_name: str) -> bool:
+        """Check if an environment variable name indicates sensitive data."""
+        upper_name = var_name.upper()
+        return any(sensitive in upper_name for sensitive in self.SENSITIVE_ENV_VARS)
+
     def _build_launch_environment(
         self,
         config: Optional[PlatformConfiguration],
@@ -317,6 +467,9 @@ class GameLauncher:
 
         Creates an isolated environment dict without modifying os.environ.
         This ensures thread-safety and prevents pollution of the parent process.
+
+        Security: Sensitive environment variables are excluded from expansion
+        to prevent information disclosure (Gap 6 fix).
 
         Args:
             config: Platform configuration (may be None)
@@ -336,8 +489,11 @@ class GameLauncher:
             # Set specified variables (with expansion if enabled)
             for name, value in config.environment.set_variables.items():
                 if config.environment.expand_variables:
-                    # Expand references to other variables
+                    # Security: Only expand non-sensitive variables (Gap 6 fix)
                     for existing_name, existing_value in env.items():
+                        # Skip sensitive variables to prevent info disclosure
+                        if self._is_sensitive_var(existing_name):
+                            continue
                         value = value.replace(f"${existing_name}", existing_value)
                         value = value.replace(f"${{{existing_name}}}", existing_value)
                 env[name] = value
